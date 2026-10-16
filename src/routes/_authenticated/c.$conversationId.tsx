@@ -66,7 +66,7 @@ function Conversation({ conversationId }: { conversationId: string }) {
   const onEvent = useCallback((event: LiveEvent) => {
     if (event.type === "session.input_transcript.delta" || event.type === "session.output_transcript.delta") {
       const role: Row["role"] = event.type === "session.input_transcript.delta" ? "user" : "assistant";
-      const delta = typeof event.delta === "string" ? event.delta : "";
+      const delta = typeof event["delta"] === "string" ? event["delta"] : "";
       if (!delta) return;
       const next = [...rowsRef.current];
       const last = next[next.length - 1];
@@ -75,7 +75,7 @@ function Conversation({ conversationId }: { conversationId: string }) {
       rowsRef.current = next;
       setRows(next);
     } else if (event.type === "app.memory.saved") {
-      const plan = event.plan as { memories?: string[] } | undefined;
+      const plan = event["plan"] as { memories?: string[] } | undefined;
       if (plan?.memories?.length) setNotes((n) => [...n, ...plan.memories!]);
     }
   }, []);

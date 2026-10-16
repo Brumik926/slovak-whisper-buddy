@@ -4,7 +4,7 @@ import { lovable } from "@/integrations/lovable/index";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (s: Record<string, unknown>) => ({ denied: s.denied === 1 || s.denied === "1" ? 1 : undefined }),
+  validateSearch: (s: Record<string, unknown>) => ({ denied: s["denied"] === 1 || s["denied"] === "1" ? 1 : undefined }),
   head: () => ({
     meta: [
       { title: "Prihlásenie – Lumen" },
