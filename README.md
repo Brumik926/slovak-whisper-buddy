@@ -1,8 +1,6 @@
 # Brumík AI
 
-Pomôžte mi vytvoriť aplikáciu s umelou inteligenciou pomocou Lovable AI. Nech je to hlasový model ktorý sa bude učiť a prispôsobovať svoje zmýšľanie a odpovede len pre mňa bude to čisto súkromný projekt
-
-This project was built with [Lovable](https://lovable.dev).
+Ahoj volám sa Brumík ,som tvoj AI kamarát a poradca.No najprv ťa musím spoznať aby som ti čo najlepšie porozumel a poradil správne rozhodnutia v živote .
 
 **Live app**: https://slovak-whisper-buddy.lovable.app
 
