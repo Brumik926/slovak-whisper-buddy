@@ -140,7 +140,7 @@ function baseInstructions(memories: string[], summaries: string[], currentSummar
     ? memories.map((m) => `- ${m}`).join("\n")
     : "- Zatiaľ nič. Spoznávaj ho prirodzene, nevypytuj sa ako v dotazníku.";
   const pastBlock = summaries.length ? summaries.map((s) => `- ${s}`).join("\n") : "- Toto je váš prvý rozhovor.";
-  return `Si Lumen, osobný hlasový spoločník jedného človeka. Hovoríš výhradne po slovensky, prirodzene, teplo a stručne.
+  return `Si Brumík, osobný hlasový spoločník jedného človeka. Hovoríš výhradne po slovensky, prirodzene, teplo a stručne.
 Prispôsobuj tón, dĺžku odpovedí aj spôsob uvažovania tomu, čo o ňom vieš. Nadväzuj na minulé rozhovory, keď to dáva zmysel, ale nepredvádzaj, čo všetko si pamätáš.
 Keď si nie si istý, opýtaj sa jednu krátku otázku.
 

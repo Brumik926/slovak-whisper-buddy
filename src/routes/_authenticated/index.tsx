@@ -4,9 +4,9 @@ import { AppShell, useNewConversation } from "@/components/AppShell";
 export const Route = createFileRoute("/_authenticated/")({
   head: () => ({
     meta: [
-      { title: "Lumen – tvoj hlasový spoločník" },
+      { title: "Brumík – tvoj hlasový spoločník" },
       { name: "description", content: "Začni nový hlasový rozhovor so svojím osobným AI spoločníkom." },
-      { property: "og:title", content: "Lumen – tvoj hlasový spoločník" },
+      { property: "og:title", content: "Brumík – tvoj hlasový spoločník" },
       { property: "og:description", content: "Začni nový hlasový rozhovor so svojím osobným AI spoločníkom." },
     ],
   }),

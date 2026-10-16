@@ -58,9 +58,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lumen – osobný hlasový spoločník" },
+      { title: "Brumík – osobný hlasový spoločník" },
       { name: "description", content: "Súkromný hlasový AI spoločník, ktorý sa učí a prispôsobuje." },
-      { property: "og:title", content: "Lumen – osobný hlasový spoločník" },
+      { property: "og:title", content: "Brumík – osobný hlasový spoločník" },
       { property: "og:description", content: "Súkromný hlasový AI spoločník, ktorý sa učí a prispôsobuje." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

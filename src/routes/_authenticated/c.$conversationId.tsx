@@ -11,9 +11,9 @@ import { finishConversation } from "@/lib/conversations.functions";
 export const Route = createFileRoute("/_authenticated/c/$conversationId")({
   head: () => ({
     meta: [
-      { title: "Rozhovor – Lumen" },
+      { title: "Rozhovor – Brumík" },
       { name: "description", content: "Hlasový rozhovor s tvojím osobným spoločníkom." },
-      { property: "og:title", content: "Rozhovor – Lumen" },
+      { property: "og:title", content: "Rozhovor – Brumík" },
       { property: "og:description", content: "Hlasový rozhovor s tvojím osobným spoločníkom." },
     ],
   }),
