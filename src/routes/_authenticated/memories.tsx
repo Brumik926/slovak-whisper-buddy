@@ -6,9 +6,9 @@ import { supabase } from "@/integrations/supabase/client";
 export const Route = createFileRoute("/_authenticated/memories")({
   head: () => ({
     meta: [
-      { title: "Čo o mne vie – Lumen" },
+      { title: "Čo o mne vie – Brumík" },
       { name: "description", content: "Prehľad všetkého, čo sa tvoj spoločník o tebe naučil." },
-      { property: "og:title", content: "Čo o mne vie – Lumen" },
+      { property: "og:title", content: "Čo o mne vie – Brumík" },
       { property: "og:description", content: "Prehľad všetkého, čo sa tvoj spoločník o tebe naučil." },
     ],
   }),

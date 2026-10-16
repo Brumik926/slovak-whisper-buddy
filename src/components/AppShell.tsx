@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <nav className="flex h-full flex-col gap-4 p-4">
       <div className="flex items-center justify-between px-2 pt-2">
         <Link to="/" className="font-display text-2xl" onClick={() => setOpen(false)}>
-          Lumen
+          Brumík
         </Link>
         <button className="md:hidden" onClick={() => setOpen(false)} aria-label="Zavrieť menu">
           <X className="h-5 w-5" />
@@ -101,7 +101,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button onClick={() => setOpen(true)} aria-label="Otvoriť menu">
             <Menu className="h-6 w-6" />
           </button>
-          <span className="font-display text-xl">Lumen</span>
+          <span className="font-display text-xl">Brumík</span>
         </header>
         {children}
       </div>
