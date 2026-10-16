@@ -152,7 +152,7 @@ async function answerQuestion(
   correlation: { runID: string; sessionID: string | undefined; delegationID: string },
   signal: AbortSignal,
   consumeInput: () => void,
-  onPlan: (plan: ReturnType<typeof planStudySchedule>) => void,
+  onPlan: (plan: PlanNote) => void,
 ) {
   signal.throwIfAborted();
   const provider = createOpenAI({
@@ -285,7 +285,7 @@ export function bindLiveConnection(
   let task: AbortController | undefined;
   const pendingDelegations: Array<{
     event: ProviderEvent;
-    plan?: ReturnType<typeof planStudySchedule>;
+    plan?: PlanNote;
   }> = [];
   let completedDelegation: (typeof pendingDelegations)[number] | undefined;
   const backendMessages: ModelMessage[] = [];
@@ -406,7 +406,7 @@ export function bindLiveConnection(
     restartTimer = setTimeout(() => void runDelegation(), 300);
   }
 
-  function deliverResult(delegationID: string, answer: string, plan?: ReturnType<typeof planStudySchedule>) {
+  function deliverResult(delegationID: string, answer: string, plan?: PlanNote) {
     if (closing) return;
     if (gateway?.readyState !== 1) return stop();
     try {
@@ -420,7 +420,7 @@ export function bindLiveConnection(
           }),
         );
       }
-      if (plan) emit({ type: "app.study_schedule.plan", delegation_id: delegationID, plan });
+      if (plan) emit({ type: "app.memory.saved", delegation_id: delegationID, plan });
       completedDelegation = pendingDelegations.shift();
     } catch {
       stop();
