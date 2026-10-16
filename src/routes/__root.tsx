@@ -56,10 +56,9 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
-      { charSet: "utf-8" }
+      { charSet: "utf-8" },
       { name: "theme-color", content: "#000000" },
       { name: "apple-mobile-web-app-title", content: "Brumík" },
-,
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Brumík – osobný hlasový spoločník" },
       { name: "description", content: "Súkromný hlasový AI spoločník, ktorý sa učí a prispôsobuje." },
@@ -71,7 +70,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-            { rel: "icon", href: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      { rel: "icon", href: "/icon-192.png", type: "image/png", sizes: "192x192" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
