@@ -1,18 +1,25 @@
 import { createOpenAI } from "@ai-sdk/openai";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { stepCountIs, streamText, tool, type ModelMessage } from "ai";
 import process from "node:process";
 import { z } from "zod";
+import type { Database } from "@/integrations/supabase/types";
 
 export type LiveConfig = {
   baseURL: string;
   key: string;
   liveModel: string;
   backendModel: string;
+  supabaseUrl: string;
+  supabaseKey: string;
   openingInstructions?: string;
 };
 
-// Fill from co-loaded knowledge: the gateway URL, the Live model and the resolved chat model.
-const liveSettings = { baseURL: "", liveModel: "", backendModel: "" };
+const liveSettings = {
+  baseURL: "https://ai.gateway.lovable.dev/v1",
+  liveModel: "openai/gpt-live-1",
+  backendModel: "openai/gpt-6-astra",
+};
 
 export type LiveSocket = {
   readonly readyState: number;
@@ -51,8 +58,16 @@ export function getLiveConfig(): LiveConfig {
   const config: LiveConfig = {
     ...liveSettings,
     key: process.env["LOVABLE_API_KEY"] ?? "",
+    supabaseUrl: process.env["SUPABASE_URL"] ?? "",
+    supabaseKey: process.env["SUPABASE_PUBLISHABLE_KEY"] ?? "",
+    openingInstructions:
+      "Začni rozhovor po slovensky: krátko a srdečne pozdrav, prípadne nadviaž na niečo, čo o ňom vieš, a polož jednu otázku. Potom počúvaj.",
   };
-  if ([config.baseURL, config.key, config.liveModel, config.backendModel].some((value) => !value)) {
+  if (
+    [config.baseURL, config.key, config.liveModel, config.backendModel, config.supabaseUrl, config.supabaseKey].some(
+      (value) => !value,
+    )
+  ) {
     throw new Error("Missing Live relay configuration");
   }
   return config;
@@ -111,39 +126,97 @@ export function handleLiveRequest(request: Request): Response {
   return new Response(null, response);
 }
 
-const conversationInstructions = `You are Mira, a calm learning companion.
-Speak naturally in brief replies. Ask a focused question when details are unclear.
-Backchannel policy: Use moderate listening sounds without taking over.
-Interruption policy: Stop your answer and listen when the user interrupts.
+type PlanNote = { memories: string[] };
+
+export type PersonalContext = {
+  supabase: SupabaseClient<Database>;
+  userId: string;
+  conversationId: string;
+  instructions: string;
+};
+
+function baseInstructions(memories: string[], summaries: string[], currentSummary: string | null) {
+  const memoryBlock = memories.length
+    ? memories.map((m) => `- ${m}`).join("\n")
+    : "- Zatiaľ nič. Spoznávaj ho prirodzene, nevypytuj sa ako v dotazníku.";
+  const pastBlock = summaries.length ? summaries.map((s) => `- ${s}`).join("\n") : "- Toto je váš prvý rozhovor.";
+  return `Si Lumen, osobný hlasový spoločník jedného človeka. Hovoríš výhradne po slovensky, prirodzene, teplo a stručne.
+Prispôsobuj tón, dĺžku odpovedí aj spôsob uvažovania tomu, čo o ňom vieš. Nadväzuj na minulé rozhovory, keď to dáva zmysel, ale nepredvádzaj, čo všetko si pamätáš.
+Keď si nie si istý, opýtaj sa jednu krátku otázku.
+
+Čo o ňom vieš:
+${memoryBlock}
+
+Predchádzajúce rozhovory:
+${pastBlock}
+${currentSummary ? `\nTento rozhovor pokračuje, doteraz: ${currentSummary}\n` : ""}
+Backchannel policy: Používaj mierne zvuky počúvania (hm, aha) bez preberania slova.
+Interruption policy: Keď ťa preruší, prestaň hovoriť a počúvaj.
 Delegation policy:
-Backend tools: Reason through questions and plan study sessions across days.
-Delegate to the backend when: The user wants a study schedule or careful reasoning,
-or a correction changes a question already being worked on.
-Do not delegate to the backend when: Greeting, clarifying a question, or repeating
-a still-current answer. Wait for the backend result before presenting its answer.`;
+Backend tools: Uložiť nový trvalý poznatok o používateľovi; vyhľadať v minulých rozhovoroch.
+Delegate to the backend when: Používateľ ťa požiada, aby si si niečo zapamätal, alebo zdieľa dôležitý trvalý fakt či preferenciu o sebe; alebo sa pýta na niečo, o čom ste hovorili v minulosti a nie je to vyššie.
+Do not delegate to the backend when: Pozdrav, bežný rozhovor, otázka, na ktorú vieš odpovedať sám. Pred potvrdením, že si si niečo uložil, počkaj na výsledok z backendu.`;
+}
 
-const studyScheduleInput = z
-  .object({
-    total_minutes: z.number().int().min(1).max(10_080),
-    days: z.number().int().min(1).max(30),
-  })
-  .strict();
-
-function planStudySchedule(args: z.infer<typeof studyScheduleInput>) {
-  const daily = Math.floor(args.total_minutes / args.days);
+export async function authorizeOwner(config: LiveConfig, token: unknown, conversationID: unknown): Promise<PersonalContext> {
+  if (typeof token !== "string" || token.split(".").length !== 3) throw new Error("Prihlás sa, prosím.");
+  if (typeof conversationID !== "string" || !/^[0-9a-f-]{36}$/i.test(conversationID)) {
+    throw new Error("Neplatný rozhovor.");
+  }
+  const key = config.supabaseKey;
+  const supabase = createClient<Database>(config.supabaseUrl, key, {
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+    global: {
+      headers: { Authorization: `Bearer ${token}` },
+      fetch: (input, init) => {
+        const headers = new Headers(init?.headers);
+        headers.set("apikey", key);
+        return fetch(input, { ...init, headers });
+      },
+    },
+  });
+  const { data: claims, error } = await supabase.auth.getClaims(token);
+  const userId = claims?.claims?.sub;
+  if (error || !userId) throw new Error("Prihlásenie vypršalo. Prihlás sa znova.");
+  const { data: owner } = await supabase.rpc("is_owner");
+  if (!owner) throw new Error("Táto aplikácia je súkromná.");
+  const [{ data: conversation }, { data: memories }, { data: past }] = await Promise.all([
+    supabase.from("conversations").select("id, summary").eq("id", conversationID).maybeSingle(),
+    supabase.from("memories").select("content").order("created_at", { ascending: false }).limit(80),
+    supabase
+      .from("conversations")
+      .select("title, summary, created_at")
+      .neq("id", conversationID)
+      .not("summary", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(6),
+  ]);
+  if (!conversation) throw new Error("Rozhovor sa nenašiel.");
   return {
-    total_minutes: args.total_minutes,
-    days: args.days,
-    sessions: Array.from({ length: args.days }, (_, index) => ({
-      day: index + 1,
-      minutes: daily + (index < args.total_minutes % args.days ? 1 : 0),
-    })),
+    supabase,
+    userId,
+    conversationId: conversationID,
+    instructions: baseInstructions(
+      (memories ?? []).map((m) => m.content).reverse(),
+      (past ?? []).map((p) => `${new Date(p.created_at).toLocaleDateString("sk-SK")} – ${p.title}: ${p.summary}`),
+      conversation.summary,
+    ),
   };
 }
 
+const rememberInput = z.object({
+  facts: z.array(
+    z.object({
+      content: z.string().describe("Krátky poznatok o používateľovi v tretej osobe, po slovensky."),
+      category: z.enum(["fakt", "preferencia", "záujem", "cieľ", "štýl"]),
+    }),
+  ),
+});
+const searchInput = z.object({ query: z.string().describe("Jedno alebo dve kľúčové slová po slovensky.") });
+
 function isListeningSound(text: string) {
   const normalized = text.toLowerCase().replace(/[\s\p{Pd}]/gu, "");
-  return /^(?:m+hm+|uhhuh)[.,!]*$/.test(normalized);
+  return /^(?:m+hm+|uhhuh|hm+|aha)[.,!]*$/.test(normalized);
 }
 
 async function answerQuestion(
@@ -152,6 +225,7 @@ async function answerQuestion(
   correlation: { runID: string; sessionID: string | undefined; delegationID: string },
   signal: AbortSignal,
   consumeInput: () => void,
+  personal: PersonalContext,
   onPlan: (plan: PlanNote) => void,
 ) {
   signal.throwIfAborted();
@@ -192,7 +266,7 @@ async function answerQuestion(
         ...(config.backendModel !== "openai/chat-latest"
           ? {
               forceReasoning: true,
-              reasoningEffort: "medium",
+              reasoningEffort: "low",
               reasoningSummary: "auto",
               include: ["reasoning.encrypted_content"],
             }
@@ -200,23 +274,53 @@ async function answerQuestion(
       },
     },
     system:
-      "Help a spoken learning companion answer the latest user question. " +
-      "Transcripts may be incomplete or corrected. Use the latest correction. " +
-      "Continue from completed tool results; do not repeat completed actions. " +
-      "Return verified facts and useful next steps in at most 150 words. " +
-      "To display a study schedule for the current request, call plan_study_schedule with its total minutes and days. " +
-      "Ask for missing details instead of guessing. The tool only calculates a draft plan; " +
-      "it does not save calendar events. You have no other tools.",
+      "Pomáhaš hlasovému osobnému spoločníkovi. Prepisy môžu byť neúplné alebo opravené; ber do úvahy poslednú opravu. " +
+      "Ak používateľ chce, aby si si niečo zapamätal, alebo prezradil trvalý fakt či preferenciu, zavolaj remember_facts. " +
+      "Ak sa pýta na minulé rozhovory, zavolaj search_past_conversations. Neopakuj už dokončené akcie. " +
+      "Odpovedz po slovensky, max 80 slov, ako podklad pre hovorenú odpoveď. Tvrď, že si niečo uložil, len ak to nástroj potvrdil.",
     messages,
     tools: {
-      plan_study_schedule: tool({
-        description: "Distribute a total study time evenly across days and return a draft schedule.",
-        inputSchema: studyScheduleInput,
-        execute: async (args) => {
+      remember_facts: tool({
+        description: "Uloží jeden alebo viac trvalých poznatkov o používateľovi.",
+        inputSchema: rememberInput,
+        execute: async ({ facts }) => {
           signal.throwIfAborted();
-          const plan = planStudySchedule(args);
-          onPlan(plan);
-          return plan;
+          const rows = facts
+            .map((f) => ({ content: f.content.trim().slice(0, 300), category: f.category }))
+            .filter((f) => f.content)
+            .slice(0, 10)
+            .map((f) => ({ ...f, user_id: personal.userId, source_conversation_id: personal.conversationId }));
+          if (!rows.length) return { saved: [] };
+          const { error } = await personal.supabase.from("memories").insert(rows);
+          if (error) return { saved: [], error: "Uloženie zlyhalo." };
+          onPlan({ memories: rows.map((r) => r.content) });
+          return { saved: rows.map((r) => r.content) };
+        },
+      }),
+      search_past_conversations: tool({
+        description: "Vyhľadá v minulých rozhovoroch a ich súhrnoch.",
+        inputSchema: searchInput,
+        execute: async ({ query }) => {
+          signal.throwIfAborted();
+          const q = query.replace(/[%_,()]/g, " ").trim().slice(0, 60);
+          if (!q) return { results: [] };
+          const [{ data: convs }, { data: lines }] = await Promise.all([
+            personal.supabase
+              .from("conversations")
+              .select("title, summary, created_at")
+              .or(`title.ilike.%${q}%,summary.ilike.%${q}%`)
+              .limit(5),
+            personal.supabase
+              .from("transcript_entries")
+              .select("role, text, created_at")
+              .ilike("text", `%${q}%`)
+              .order("created_at", { ascending: false })
+              .limit(8),
+          ]);
+          return {
+            conversations: (convs ?? []).map((c) => ({ date: c.created_at.slice(0, 10), title: c.title, summary: c.summary })),
+            lines: (lines ?? []).map((l) => ({ date: l.created_at.slice(0, 10), role: l.role, text: l.text.slice(0, 300) })),
+          };
         },
       }),
     },
@@ -275,6 +379,7 @@ export function bindLiveConnection(
 ): void {
   const config = { ...configuration };
   const runID = crypto.randomUUID();
+  let personal: PersonalContext | undefined;
   const setupAbort = new AbortController();
   let gateway: LiveSocket | undefined;
   let sessionID: string | undefined;
@@ -420,7 +525,7 @@ export function bindLiveConnection(
           }),
         );
       }
-      if (plan) emit({ type: "app.memory.saved", delegation_id: delegationID, plan });
+      void plan;
       completedDelegation = pendingDelegations.shift();
     } catch {
       stop();
@@ -437,6 +542,7 @@ export function bindLiveConnection(
     task = controller;
     let taskRevision = revision;
     try {
+      if (!personal) throw new Error("Not authorized");
       const answer = await answerQuestion(
         backendMessages,
         config,
@@ -444,13 +550,15 @@ export function bindLiveConnection(
         controller.signal,
         () => {
           const updates = transcripts.slice(transcriptCursor);
-          if (updates.some(({ role, listeningSound }) => role === "user" && !listeningSound)) delete pending.plan;
           backendMessages.push(...updates.map(({ role, text }) => ({ role, content: text })));
           transcriptCursor = transcripts.length;
           taskRevision = revision;
         },
+        personal,
         (plan) => {
-          pending.plan = plan;
+          pending.plan = { memories: [...(pending.plan?.memories ?? []), ...plan.memories] };
+          // Saved memories are durable writes: show them right away regardless of later revisions.
+          emit({ type: "app.memory.saved", delegation_id: id, plan });
         },
       );
       if (closing || controller.signal.aborted) return;
@@ -563,13 +671,16 @@ export function bindLiveConnection(
     }
   }
 
-  async function startSession(sdp: string) {
+  async function startSession(sdp: string, token: unknown, conversationID: unknown) {
     if (closing || browser.readyState !== 1) return;
     clearTimeout(startTimer);
     startupTimer = setTimeout(() => {
       emit({ type: "app.error", error: { message: "Voice startup timed out" } });
       stop();
     }, 40_000);
+    // Private app: verify the signed-in owner before opening a paid Gateway session.
+    personal = await authorizeOwner(config, token, conversationID);
+    if (closing || browser.readyState !== 1) return;
     const accepted = await connect(
       new URL(`${gatewayAPIBase(config.baseURL)}/live/sessions`).href,
       {
@@ -595,7 +706,7 @@ export function bindLiveConnection(
         type: "session.start",
         session: {
           model: config.liveModel,
-          instructions: conversationInstructions,
+          instructions: personal.instructions,
           audio: { output: { voice: "marin" } },
           delegation: { type: "client" },
         },
@@ -616,7 +727,7 @@ export function bindLiveConnection(
         }
         starting = true;
         execution.waitUntil(
-          startSession(event.sdp).catch((error) => {
+          startSession(event.sdp, event.token, event.conversationId).catch((error) => {
             if (!closing)
               emit({
                 type: "app.error",
