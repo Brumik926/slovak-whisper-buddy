@@ -1,14 +1,18 @@
-# Welcome to your Lovable project
+# Brumík AI
+
+Pomôžte mi vytvoriť aplikáciu s umelou inteligenciou pomocou Lovable AI. Nech je to hlasový model ktorý sa bude učiť a prispôsobovať svoje zmýšľanie a odpovede len pre mňa bude to čisto súkromný projekt
 
 This project was built with [Lovable](https://lovable.dev).
 
+**Live app**: https://slovak-whisper-buddy.lovable.app
+
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/b8cf87d0-ad6f-40d8-9c11-5c5a92c94028).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +24,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
