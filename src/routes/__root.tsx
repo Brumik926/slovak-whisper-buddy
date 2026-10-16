@@ -56,7 +56,10 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
-      { charSet: "utf-8" },
+      { charSet: "utf-8" }
+      { name: "theme-color", content: "#000000" },
+      { name: "apple-mobile-web-app-title", content: "Brumík" },
+,
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Brumík – osobný hlasový spoločník" },
       { name: "description", content: "Súkromný hlasový AI spoločník, ktorý sa učí a prispôsobuje." },
