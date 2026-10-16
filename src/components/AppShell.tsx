@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { Brain, LogOut, Menu, Plus, X } from "lucide-react";
+import { Brain, LogOut, Menu, Plus, UserPlus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const conversationsQuery = {
@@ -30,6 +30,10 @@ export function useNewConversation() {
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const { data: conversations } = useQuery(conversationsQuery);
+  const { data: isAdmin } = useQuery({
+    queryKey: ["is-admin"],
+    queryFn: async () => (await supabase.rpc("is_admin")).data ?? false,
+  });
   const params = useParams({ strict: false }) as { conversationId?: string };
   const newConversation = useNewConversation();
 
@@ -76,6 +80,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         <Brain className="h-4 w-4" /> Čo o mne vie
       </Link>
+      {isAdmin && (
+        <Link
+          to="/invites"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
+        >
+          <UserPlus className="h-4 w-4" /> Pozvánky
+        </Link>
+      )}
       <button
         onClick={() => supabase.auth.signOut()}
         className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"

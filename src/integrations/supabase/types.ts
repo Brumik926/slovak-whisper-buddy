@@ -59,6 +59,21 @@ export type Database = {
         }
         Relationships: []
       }
+      invites: {
+        Row: {
+          created_at: string
+          email: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+        }
+        Relationships: []
+      }
       memories: {
         Row: {
           category: string
@@ -138,6 +153,7 @@ export type Database = {
     }
     Functions: {
       claim_owner: { Args: never; Returns: boolean }
+      is_admin: { Args: never; Returns: boolean }
       is_owner: { Args: never; Returns: boolean }
     }
     Enums: {
