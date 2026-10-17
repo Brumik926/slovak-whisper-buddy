@@ -10,5 +10,6 @@
 <!-- LOVABLE:END -->
 
 - Live voice runs through a persistent WebSocket relay at `/api/live` (src/lib/live-relay.server.ts, dispatched in src/server.ts and live-vite-plugin.ts in dev); the relay verifies the signed-in owner from the token in `app.start` before opening a paid Gateway session — browser sockets cannot send auth headers.
-- Single-owner access: the first signed-in account claims `allowed_owner` via `claim_owner()`; all RLS policies require `is_owner()` so other accounts see nothing.
+- Access uses the legacy `claim_owner()` / `is_owner()` functions as authenticated-user checks; data RLS must always also match `user_id = auth.uid()` to isolate each account.
+- Clear the query cache on sign-out so a subsequent account cannot see cached private data.
 - Learning happens in two places: live delegation tools (remember/search) in the relay, and `finishConversation` server fn that saves the transcript and extracts memories + summary after each call.

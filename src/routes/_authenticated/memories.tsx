@@ -10,6 +10,8 @@ export const Route = createFileRoute("/_authenticated/memories")({
       { name: "description", content: "Prehľad všetkého, čo sa tvoj spoločník o tebe naučil." },
       { property: "og:title", content: "Čo o mne vie – Brumík" },
       { property: "og:description", content: "Prehľad všetkého, čo sa tvoj spoločník o tebe naučil." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Memories,

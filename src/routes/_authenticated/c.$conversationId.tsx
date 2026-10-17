@@ -15,6 +15,8 @@ export const Route = createFileRoute("/_authenticated/c/$conversationId")({
       { name: "description", content: "Hlasový rozhovor s tvojím osobným spoločníkom." },
       { property: "og:title", content: "Rozhovor – Brumík" },
       { property: "og:description", content: "Hlasový rozhovor s tvojím osobným spoločníkom." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: ConversationPage,
