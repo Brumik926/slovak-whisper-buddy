@@ -38,54 +38,7 @@ function Conversation({ conversationId }: { conversationId: string }) {
   const finish = useServerFn(finishConversation);
   const sendText = useServerFn(sendTextMessage);
 
-  // 1. Wake Lock: Zabráni zhasnutiu displeja počas hovoru s Brumíkom
-  useEffect(() => {
-    if (!live || !("wakeLock" in navigator)) return;
-    let lock: any = null;
-
-    const requestLock = async () => {
-      try {
-        lock = await (navigator as any).wakeLock.request("screen");
-      } catch (err) {
-        console.log("Wake Lock sa nepodarilo aktivovať:", err);
-      }
-    };
-
-    requestLock();
-
-    // Ak sa používateľ vráti do prehliadača, znovu obnovíme zámok
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && live) {
-        requestLock();
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-      if (lock) lock.release().catch(() => {});
-    };
-  }, [live]);
-
-  // 2. Media Session: Zobrazí Brumíka v multimediálnom ovládaní telefónu
-  useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-
-    if (live) {
-      navigator.mediaSession.metadata = new MediaMetadata({
-        title: "Brumík počúva",
-        artist: "Živý rozhovor",
-      });
-      navigator.mediaSession.playbackState = "playing";
-      navigator.mediaSession.setActionHandler("stop", () => {
-        voice.stop();
-      });
-    } else {
-      navigator.mediaSession.playbackState = "none";
-    }
-  }, [live, voice]);
-  
-const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [notes, setNotes] = useState<string[]>([]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "done" | "error">("idle");
   const [textInput, setTextInput] = useState("");
@@ -136,6 +89,58 @@ const [token, setToken] = useState<string | null>(null);
   const voice = useLiveVoice({ onEvent, startPayload: { token, conversationId } });
   const idle = voice.status === "idle" || voice.status === "closed";
   const live = voice.status === "connected";
+
+  // 1. Wake Lock: Zabráni zhasnutiu displeja počas aktívneho hovoru
+  useEffect(() => {
+    if (!live || typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+    let lock: any = null;
+
+    const requestLock = async () => {
+      try {
+        lock = await (navigator as any).wakeLock.request("screen");
+      } catch (err) {
+        console.log("Wake Lock sa nepodarilo aktivovať:", err);
+      }
+    };
+
+    requestLock();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && live) {
+        requestLock();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      if (lock) lock.release().catch(() => {});
+    };
+  }, [live]);
+
+  // 2. Media Session: Zobrazí Brumíka v multimediálnom ovládaní telefónu
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+
+    if (live) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: "Brumík počúva",
+          artist: "Živý rozhovor",
+        });
+        navigator.mediaSession.playbackState = "playing";
+        navigator.mediaSession.setActionHandler("stop", () => {
+          voice.stop();
+        });
+      } catch (e) {
+        console.log("MediaSession chyba:", e);
+      }
+    } else {
+      try {
+        navigator.mediaSession.playbackState = "none";
+      } catch (e) {}
+    }
+  }, [live, voice]);
 
   // Po skončení hovoru uloží prepis a vyextrahuje spomienky
   useEffect(() => {
