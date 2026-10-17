@@ -125,3 +125,62 @@ export const finishConversation = createServerFn({ method: "POST" })
       .eq("id", data.conversationId);
     return { learned: fresh.length };
   });
+export const sendTextMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { conversationId: string; message: string }) => ({
+    conversationId: input.conversationId,
+    message: input.message.trim(),
+  }))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    // 1. Uložíme správu používateľa do transcript_entries
+    const { count } = await supabase
+      .from("transcript_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", data.conversationId);
+
+    const position = count ?? 0;
+    await supabase.from("transcript_entries").insert({
+      conversation_id: data.conversationId,
+      user_id: userId,
+      role: "user",
+      text: data.message,
+      position,
+    });
+
+    // 2. Načítame spomienky používateľa pre kontext
+    const { data: memories } = await supabase
+      .from("memories")
+      .select("content")
+      .order("created_at", { ascending: false })
+      .limit(60);
+
+    const key = process.env["LOVABLE_API_KEY"];
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const { generateText } = await import("ai");
+
+    const provider = createOpenAI({
+      baseURL: "https://ai.gateway.lovable.dev/v1",
+      apiKey: key,
+    });
+
+    // 3. Odpoveď Brumíka s rovnakou osobnosťou a pamäťou
+    const { text: reply } = await generateText({
+      model: provider("openai/gpt-5"),
+      system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, teplo, priateľsky a stručne.
+Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
+      prompt: data.message,
+    });
+
+    // 4. Uložíme odpoveď Brumíka do histórie
+    await supabase.from("transcript_entries").insert({
+      conversation_id: data.conversationId,
+      user_id: userId,
+      role: "assistant",
+      text: reply,
+      position: position + 1,
+    });
+
+    return { reply };
+  });
