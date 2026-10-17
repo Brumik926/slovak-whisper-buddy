@@ -8,6 +8,8 @@ export const Route = createFileRoute("/_authenticated/")({
       { name: "description", content: "Začni nový hlasový rozhovor so svojím osobným AI spoločníkom." },
       { property: "og:title", content: "Brumík – tvoj hlasový spoločník" },
       { property: "og:description", content: "Začni nový hlasový rozhovor so svojím osobným AI spoločníkom." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Home,

@@ -11,6 +11,8 @@ export const Route = createFileRoute("/auth")({
       { name: "description", content: "Prihlás sa do svojho súkromného hlasového spoločníka." },
       { property: "og:title", content: "Prihlásenie – Brumík" },
       { property: "og:description", content: "Prihlás sa do svojho súkromného hlasového spoločníka." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: AuthPage,
@@ -19,7 +21,7 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const { denied } = Route.useSearch();
   const navigate = useNavigate();
-  const [error, setError] = useState<string | null>(denied ? "Táto aplikácia je súkromná a patrí inému účtu." : null);
+  const [error, setError] = useState<string | null>(denied ? "Prístup sa nepodarilo overiť. Skús sa prihlásiť znova." : null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
