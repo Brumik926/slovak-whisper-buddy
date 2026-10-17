@@ -15,7 +15,7 @@ const reflectionSchema = z.object({
   ),
 });
 
-/** Saves a finished call transcript, then learns new memories and a summary from it. */
+/** Odošle textovú správu Brumíkovi a uloží odpoveď do histórie. */
 export const sendTextMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { conversationId: string; message: string }) => ({
@@ -25,7 +25,7 @@ export const sendTextMessage = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // 1. Uložíme správu používateľa do transcript_entries
+    // 1. Zistíme pozíciu a zapíšeme správu používateľa
     const { count } = await supabase
       .from("transcript_entries")
       .select("id", { count: "exact", head: true })
@@ -40,7 +40,7 @@ export const sendTextMessage = createServerFn({ method: "POST" })
       position,
     });
 
-    // 2. Načítame spomienky používateľa pre kontext
+    // 2. Načítame spomienky pre zachovanie kontextu a osobnosti
     const { data: memories } = await supabase
       .from("memories")
       .select("content")
@@ -56,7 +56,7 @@ export const sendTextMessage = createServerFn({ method: "POST" })
       apiKey: key,
     });
 
-    // 3. Odpoveď Brumíka s rovnakou osobnosťou a pamäťou
+    // 3. Odpoveď Brumíka
     const { text: reply } = await generateText({
       model: provider("openai/gpt-5"),
       system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, teplo, priateľsky a stručne.
@@ -64,7 +64,7 @@ Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).jo
       prompt: data.message,
     });
 
-    // 4. Uložíme odpoveď Brumíka do histórie
+    // 4. Zapíšeme odpoveď Brumíka do histórie
     await supabase.from("transcript_entries").insert({
       conversation_id: data.conversationId,
       user_id: userId,
@@ -75,7 +75,9 @@ Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).jo
 
     return { reply };
   });
-byexport const finishConversation = createServerFn({ method: "POST" })
+
+/** Uloží hovor, vyextrahuje nové spomienky a vytvorí zhrnutie. */
+export const finishConversation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: { conversationId: string; entries: Entry[] }) => {
     if (!/^[0-9a-f-]{36}$/i.test(input.conversationId)) throw new Error("Neplatný rozhovor");
@@ -183,63 +185,4 @@ byexport const finishConversation = createServerFn({ method: "POST" })
       })
       .eq("id", data.conversationId);
     return { learned: fresh.length };
-  });
-export const sendTextMessage = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((input: { conversationId: string; message: string }) => ({
-    conversationId: input.conversationId,
-    message: input.message.trim(),
-  }))
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-
-    // 1. Uložíme správu používateľa do transcript_entries
-    const { count } = await supabase
-      .from("transcript_entries")
-      .select("id", { count: "exact", head: true })
-      .eq("conversation_id", data.conversationId);
-
-    const position = count ?? 0;
-    await supabase.from("transcript_entries").insert({
-      conversation_id: data.conversationId,
-      user_id: userId,
-      role: "user",
-      text: data.message,
-      position,
-    });
-
-    // 2. Načítame spomienky používateľa pre kontext
-    const { data: memories } = await supabase
-      .from("memories")
-      .select("content")
-      .order("created_at", { ascending: false })
-      .limit(60);
-
-    const key = process.env["LOVABLE_API_KEY"];
-    const { createOpenAI } = await import("@ai-sdk/openai");
-    const { generateText } = await import("ai");
-
-    const provider = createOpenAI({
-      baseURL: "https://ai.gateway.lovable.dev/v1",
-      apiKey: key,
-    });
-
-    // 3. Odpoveď Brumíka s rovnakou osobnosťou a pamäťou
-    const { text: reply } = await generateText({
-      model: provider("openai/gpt-5"),
-      system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, teplo, priateľsky a stručne.
-Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
-      prompt: data.message,
-    });
-
-    // 4. Uložíme odpoveď Brumíka do histórie
-    await supabase.from("transcript_entries").insert({
-      conversation_id: data.conversationId,
-      user_id: userId,
-      role: "assistant",
-      text: reply,
-      position: position + 1,
-    });
-
-    return { reply };
   });
