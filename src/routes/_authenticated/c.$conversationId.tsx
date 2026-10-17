@@ -1,291 +1,188 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Mic, MicOff, PhoneOff, Volume2 } from "lucide-react";
-import { AppShell } from "@/components/AppShell";
-import { supabase } from "@/integrations/supabase/client";
-import { useLiveVoice, type LiveEvent } from "@/hooks/use-live-voice";
-import { finishConversation } from "@/lib/conversations.functions";
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { z } from "zod";
 
-export const Route = createFileRoute("/_authenticated/c/$conversationId")({
-  head: () => ({
-    meta: [
-      { title: "Rozhovor – Brumík" },
-      { name: "description", content: "Hlasový rozhovor s tvojím osobným spoločníkom." },
-      { property: "og:title", content: "Rozhovor – Brumík" },
-      { property: "og:description", content: "Hlasový rozhovor s tvojím osobným spoločníkom." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-  }),
-  component: ConversationPage,
+type Entry = { role: "user" | "assistant"; text: string };
+
+const reflectionSchema = z.object({
+  title: z.string(),
+  summary: z.string(),
+  new_memories: z.array(
+    z.object({
+      content: z.string(),
+      category: z.enum(["fakt", "preferencia", "záujem", "cieľ", "štýl"]),
+    }),
+  ),
 });
 
-function ConversationPage() {
-  const { conversationId } = Route.useParams();
-  return (
-    <AppShell>
-      <Conversation key={conversationId} conversationId={conversationId} />
-    </AppShell>
-  );
-}
+/** Odošle textovú správu Brumíkovi a uloží odpoveď do histórie. */
+export const sendTextMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { conversationId: string; message: string }) => ({
+    conversationId: input.conversationId,
+    message: input.message.trim(),
+  }))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
 
-type Row = { role: "user" | "assistant"; text: string };
+    // 1. Zistíme pozíciu a zapíšeme správu používateľa
+    const { count } = await supabase
+      .from("transcript_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", data.conversationId);
 
-function Conversation({ conversationId }: 
-const sendText = useServerFn(sendTextMessage);
-const [textInput, setTextInput] = useState("");
-const [isSending, setIsSending] = useState(false);
+    const position = count ?? 0;
+    await supabase.from("transcript_entries").insert({
+      conversation_id: data.conversationId,
+      user_id: userId,
+      role: "user",
+      text: data.message,
+      position,
+    });
 
-async function handleSend(e: React.FormEvent) {
-  e.preventDefault();
-  if (!textInput.trim() || isSending) return;
-  const msg = textInput.trim();
-  setTextInput("");
-  setIsSending(true);
-  try {
-    await sendText({ data: { conversationId, message: msg } });
-    await qc.invalidateQueries({ queryKey: ["conversation", conversationId] });
-  } finally {
-    setIsSending(false);
-  }
-}
+    // 2. Načítame spomienky pre zachovanie kontextu a osobnosti
+    const { data: memories } = await supabase
+      .from("memories")
+      .select("content")
+      .order("created_at", { ascending: false })
+      .limit(60);
 
-// Do JSX na spodok stránky pridať:
-<form onSubmit={handleSend} className="sticky bottom-0 border-t bg-background/95 p-4 backdrop-blur">
-  <div className="mx-auto flex max-w-2xl gap-2">
-    <input
-      type="text"
-      value={textInput}
-      onChange={(e) => setTextInput(e.target.value)}
-      placeholder="Napíš správu Brumíkovi…"
-      className="flex-1 rounded-full border bg-secondary px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-    />
-    <button
-      type="submit"
-      disabled={isSending || !textInput.trim()}
-      className="rounded-full bg-primary px-5 py-2 font-medium text-primary-foreground disabled:opacity-50"
-    >
-      Odoslať
-    </button>
-  </div>
-</form>
-const sendText = useServerFn(sendTextMessage);
-const [textInput, setTextInput] = useState("");
-const [isSending, setIsSending] = useState(false);
+    const key = process.env["LOVABLE_API_KEY"];
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const { generateText } = await import("ai");
 
-async function handleSend(e: React.FormEvent) {
-  e.preventDefault();
-  if (!textInput.trim() || isSending) return;
-  const msg = textInput.trim();
-  setTextInput("");
-  setIsSending(true);
-  try {
-    await sendText({ data: { conversationId, message: msg } });
-    await qc.invalidateQueries({ queryKey: ["conversation", conversationId] });
-  } finally {
-    setIsSending(false);
-  }
-}
+    const provider = createOpenAI({
+      baseURL: "https://ai.gateway.lovable.dev/v1",
+      apiKey: key,
+    });
 
-// Do JSX na spodok stránky pridať:
-<form onSubmit={handleSend} className="sticky bottom-0 border-t bg-background/95 p-4 backdrop-blur">
-  <div className="mx-auto flex max-w-2xl gap-2">
-    <input
-      type="text"
-      value={textInput}
-      onChange={(e) => setTextInput(e.target.value)}
-      placeholder="Napíš správu Brumíkovi…"
-      className="flex-1 rounded-full border bg-secondary px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-    />
-    <button
-      type="submit"
-      disabled={isSending || !textInput.trim()}
-      className="rounded-full bg-primary px-5 py-2 font-medium text-primary-foreground disabled:opacity-50"
-    >
-      Odoslať
-    </button>
-  </div>
-</form>
-{ conversationId: string }) {
-  const qc = useQueryClient();
-  const finish = useServerFn(finishConversation);
-  const [token, setToken] = useState<string | null>(null);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [notes, setNotes] = useState<string[]>([]);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "done" | "error">("idle");
-  const rowsRef = useRef<Row[]>([]);
-  const savedRef = useRef(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
+    // 3. Odpoveď Brumíka
+    const { text: reply } = await generateText({
+      model: provider("openai/gpt-5"),
+      system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, teplo, priateľsky a stručne.
+Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
+      prompt: data.message,
+    });
 
-  const { data: conversation } = useQuery({
-    queryKey: ["conversation", conversationId],
-    queryFn: async () => {
-      const [{ data: c }, { data: entries }] = await Promise.all([
-        supabase.from("conversations").select("id, title, summary").eq("id", conversationId).maybeSingle(),
-        supabase
-          .from("transcript_entries")
-          .select("id, role, text")
-          .eq("conversation_id", conversationId)
-          .order("position", { ascending: true }),
-      ]);
-      return { conversation: c, entries: entries ?? [] };
-    },
+    // 4. Zapíšeme odpoveď Brumíka do histórie
+    await supabase.from("transcript_entries").insert({
+      conversation_id: data.conversationId,
+      user_id: userId,
+      role: "assistant",
+      text: reply,
+      position: position + 1,
+    });
+
+    return { reply };
   });
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setToken(data.session?.access_token ?? null));
-    const { data } = supabase.auth.onAuthStateChange((_e, session) => setToken(session?.access_token ?? null));
-    return () => data.subscription.unsubscribe();
-  }, []);
+/** Uloží hovor, vyextrahuje nové spomienky a vytvorí zhrnutie. */
+export const finishConversation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { conversationId: string; entries: Entry[] }) => {
+    if (!/^[0-9a-f-]{36}$/i.test(input.conversationId)) throw new Error("Neplatný rozhovor");
+    const entries = (input.entries ?? [])
+      .filter((e) => (e.role === "user" || e.role === "assistant") && typeof e.text === "string" && e.text.trim())
+      .slice(0, 400)
+      .map((e) => ({ role: e.role, text: e.text.trim().slice(0, 4000) }));
+    return { conversationId: input.conversationId, entries };
+  })
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: conversation } = await supabase
+      .from("conversations")
+      .select("id, summary")
+      .eq("id", data.conversationId)
+      .maybeSingle();
+    if (!conversation) throw new Error("Rozhovor sa nenašiel");
+    if (!data.entries.length) return { learned: 0 };
 
-  const onEvent = useCallback((event: LiveEvent) => {
-    if (event.type === "session.input_transcript.delta" || event.type === "session.output_transcript.delta") {
-      const role: Row["role"] = event.type === "session.input_transcript.delta" ? "user" : "assistant";
-      const delta = typeof event["delta"] === "string" ? event["delta"] : "";
-      if (!delta) return;
-      const next = [...rowsRef.current];
-      const last = next[next.length - 1];
-      if (last && last.role === role) next[next.length - 1] = { role, text: last.text + delta };
-      else next.push({ role, text: delta });
-      rowsRef.current = next;
-      setRows(next);
-    } else if (event.type === "app.memory.saved") {
-      const plan = event["plan"] as { memories?: string[] } | undefined;
-      if (plan?.memories?.length) setNotes((n) => [...n, ...plan.memories!]);
+    const { count } = await supabase
+      .from("transcript_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("conversation_id", data.conversationId);
+    const offset = count ?? 0;
+    const { error: insertError } = await supabase.from("transcript_entries").insert(
+      data.entries.map((e, i) => ({
+        conversation_id: data.conversationId,
+        user_id: userId,
+        role: e.role,
+        text: e.text,
+        position: offset + i,
+      })),
+    );
+    if (insertError) throw new Error("Prepis sa nepodarilo uložiť");
+
+    const { data: memories } = await supabase
+      .from("memories")
+      .select("content")
+      .order("created_at", { ascending: false })
+      .limit(120);
+
+    const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI nie je nakonfigurovaná");
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const { streamText, Output, NoObjectGeneratedError } = await import("ai");
+    const provider = createOpenAI({
+      baseURL: "https://ai.gateway.lovable.dev/v1",
+      apiKey: key,
+      headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    });
+    const transcript = data.entries.map((e) => `${e.role === "user" ? "Používateľ" : "Asistent"}: ${e.text}`).join("\n");
+    const result = streamText({
+      model: provider.responses("openai/gpt-6-astra"),
+      maxRetries: 0,
+      output: Output.object({ schema: reflectionSchema }),
+      providerOptions: {
+        openai: {
+          forceReasoning: true,
+          reasoningEffort: "low",
+          reasoningSummary: "auto",
+          store: false,
+          include: ["reasoning.encrypted_content"],
+        },
+      },
+      system:
+        "Analyzuješ hlasový rozhovor osobného AI spoločníka s jeho jediným používateľom. Všetko píš po slovensky. " +
+        "title: krátky názov rozhovoru (max 6 slov). summary: 1–3 vety o tom, čo sa riešilo (ak existuje predchádzajúci súhrn, zahrň ho). " +
+        "new_memories: iba NOVÉ trvalé poznatky o používateľovi (fakty o živote, preferencie, záujmy, ciele, preferovaný štýl odpovedí), " +
+        "ktoré ešte nie sú v zozname známych poznatkov. Krátke vety v tretej osobe. Maximálne 8. Ak nič nové, prázdne pole.",
+      prompt:
+        `Známe poznatky:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- žiadne"}\n\n` +
+        `Predchádzajúci súhrn: ${conversation.summary ?? "žiadny"}\n\nPrepis:\n${transcript}`,
+    });
+
+    let reflection: z.infer<typeof reflectionSchema> | null = null;
+    try {
+      reflection = await result.output;
+    } catch (error) {
+      if (NoObjectGeneratedError.isInstance(error) && error.text) {
+        const parsed = reflectionSchema.safeParse(JSON.parse(error.text));
+        if (parsed.success) reflection = parsed.data;
+      }
+      if (!reflection) {
+        console.error("Reflection failed", error);
+        await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", data.conversationId);
+        return { learned: 0 };
+      }
     }
-  }, []);
 
-  const voice = useLiveVoice({ onEvent, startPayload: { token, conversationId } });
-  const idle = voice.status === "idle" || voice.status === "closed";
-  const live = voice.status === "connected";
-
-  // When a call ends, save the transcript and let the assistant learn from it.
-  useEffect(() => {
-    if (voice.status !== "closed" || savedRef.current) return;
-    const entries = rowsRef.current.filter((r) => r.text.trim());
-    if (!entries.length) return;
-    savedRef.current = true;
-    setSaveState("saving");
-    finish({ data: { conversationId, entries } })
-      .then(async () => {
-        setSaveState("done");
-        rowsRef.current = [];
-        setRows([]);
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: ["conversation", conversationId] }),
-          qc.invalidateQueries({ queryKey: ["conversations"] }),
-          qc.invalidateQueries({ queryKey: ["memories"] }),
-        ]);
+    const fresh = reflection.new_memories
+      .map((m) => ({ content: m.content.trim().slice(0, 300), category: m.category }))
+      .filter((m) => m.content)
+      .slice(0, 8);
+    if (fresh.length) {
+      await supabase.from("memories").insert(
+        fresh.map((m) => ({ ...m, user_id: userId, source_conversation_id: data.conversationId })),
+      );
+    }
+    await supabase
+      .from("conversations")
+      .update({
+        title: reflection.title.trim().slice(0, 80) || "Rozhovor",
+        summary: reflection.summary.trim().slice(0, 1000),
+        updated_at: new Date().toISOString(),
       })
-      .catch(() => setSaveState("error"));
-  }, [voice.status, conversationId, finish, qc]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [rows.length, rows[rows.length - 1]?.text.length]);
-
-  function start() {
-    savedRef.current = false;
-    rowsRef.current = [];
-    setRows([]);
-    setNotes([]);
-    setSaveState("idle");
-    voice.start();
-  }
-
-  const history = conversation?.entries ?? [];
-  const shown: Row[] = [...history.map((e) => ({ role: e.role as Row["role"], text: e.text })), ...rows];
-
-  return (
-    <main className="flex flex-1 flex-col">
-      <audio ref={voice.audioRef} className="hidden" />
-      <div className="px-6 pt-4 md:pt-8">
-        <h1 className="truncate text-2xl md:text-3xl">{conversation?.conversation?.title ?? "Rozhovor"}</h1>
-        {conversation?.conversation?.summary && (
-          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{conversation.conversation.summary}</p>
-        )}
-      </div>
-
-      <section className="flex flex-col items-center px-6 py-8">
-        <div className="relative flex h-44 w-44 items-center justify-center md:h-52 md:w-52">
-          {live && <span className="animate-ring-pulse absolute inset-0 rounded-full border-2 border-glow" />}
-          <span
-            className={`orb block h-full w-full ${live ? "animate-orb-live" : "animate-orb-breathe"} ${
-              voice.status === "connecting" ? "opacity-70" : ""
-            }`}
-          />
-        </div>
-        <p className="mt-6 h-5 text-sm text-muted-foreground" role="status">
-          {voice.status === "connecting" && "Pripájam sa…"}
-          {live && (voice.muted ? "Mikrofón je stlmený" : "Počúvam ťa")}
-          {voice.status === "stopping" && "Ukončujem…"}
-          {idle && saveState === "saving" && "Ukladám rozhovor a učím sa z neho…"}
-          {idle && saveState === "done" && "Uložené. Zapamätal som si, čo bolo dôležité."}
-          {idle && saveState === "error" && "Rozhovor sa nepodarilo uložiť."}
-        </p>
-        {voice.error && <p className="mt-2 max-w-sm text-center text-sm text-destructive" role="alert">{voice.error}</p>}
-
-        <div className="mt-6 flex items-center gap-3">
-          {idle ? (
-            <button
-              onClick={start}
-              disabled={!token || saveState === "saving"}
-              className="flex items-center gap-2 rounded-full bg-primary px-7 py-3 font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-50"
-            >
-              <Mic className="h-5 w-5" /> {history.length ? "Pokračovať v rozhovore" : "Začať rozhovor"}
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => voice.setMuted(!voice.muted)}
-                disabled={!live}
-                aria-label={voice.muted ? "Zapnúť mikrofón" : "Stlmiť mikrofón"}
-                className="rounded-full border bg-secondary p-3 text-secondary-foreground transition hover:bg-accent disabled:opacity-50"
-              >
-                {voice.muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-              </button>
-              <button
-                onClick={voice.stop}
-                disabled={voice.status === "stopping"}
-                className="flex items-center gap-2 rounded-full bg-destructive px-6 py-3 font-semibold text-destructive-foreground transition hover:brightness-110 disabled:opacity-50"
-              >
-                <PhoneOff className="h-5 w-5" /> Ukončiť
-              </button>
-            </>
-          )}
-          {voice.playbackBlocked && (
-            <button onClick={voice.resumePlayback} className="flex items-center gap-2 rounded-full border px-4 py-3 text-sm">
-              <Volume2 className="h-4 w-4" /> Pustiť zvuk
-            </button>
-          )}
-        </div>
-        {notes.length > 0 && (
-          <div className="mt-6 flex max-w-md flex-wrap justify-center gap-2">
-            {notes.map((n, i) => (
-              <span key={i} className="rounded-full bg-user-bubble px-3 py-1 text-xs text-user-bubble-foreground">
-                Zapamätané: {n}
-              </span>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="mx-auto w-full max-w-2xl flex-1 space-y-3 px-6 pb-16">
-        {shown.map((r, i) =>
-          r.role === "user" ? (
-            <div key={i} className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-user-bubble px-4 py-2.5 text-user-bubble-foreground">
-              {r.text}
-            </div>
-          ) : (
-            <p key={i} className="max-w-[90%] leading-relaxed text-foreground/90">
-              {r.text}
-            </p>
-          ),
-        )}
-        <div ref={bottomRef} />
-      </section>
-    </main>
-  );
-}
+      .eq("id", data.conversationId);
+    return { learned: fresh.length };
+  });
