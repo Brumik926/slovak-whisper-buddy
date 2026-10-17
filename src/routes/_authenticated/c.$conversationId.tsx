@@ -33,7 +33,82 @@ function ConversationPage() {
 
 type Row = { role: "user" | "assistant"; text: string };
 
-function Conversation({ conversationId }: { conversationId: string }) {
+function Conversation({ conversationId }: 
+const sendText = useServerFn(sendTextMessage);
+const [textInput, setTextInput] = useState("");
+const [isSending, setIsSending] = useState(false);
+
+async function handleSend(e: React.FormEvent) {
+  e.preventDefault();
+  if (!textInput.trim() || isSending) return;
+  const msg = textInput.trim();
+  setTextInput("");
+  setIsSending(true);
+  try {
+    await sendText({ data: { conversationId, message: msg } });
+    await qc.invalidateQueries({ queryKey: ["conversation", conversationId] });
+  } finally {
+    setIsSending(false);
+  }
+}
+
+// Do JSX na spodok stránky pridať:
+<form onSubmit={handleSend} className="sticky bottom-0 border-t bg-background/95 p-4 backdrop-blur">
+  <div className="mx-auto flex max-w-2xl gap-2">
+    <input
+      type="text"
+      value={textInput}
+      onChange={(e) => setTextInput(e.target.value)}
+      placeholder="Napíš správu Brumíkovi…"
+      className="flex-1 rounded-full border bg-secondary px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+    />
+    <button
+      type="submit"
+      disabled={isSending || !textInput.trim()}
+      className="rounded-full bg-primary px-5 py-2 font-medium text-primary-foreground disabled:opacity-50"
+    >
+      Odoslať
+    </button>
+  </div>
+</form>
+const sendText = useServerFn(sendTextMessage);
+const [textInput, setTextInput] = useState("");
+const [isSending, setIsSending] = useState(false);
+
+async function handleSend(e: React.FormEvent) {
+  e.preventDefault();
+  if (!textInput.trim() || isSending) return;
+  const msg = textInput.trim();
+  setTextInput("");
+  setIsSending(true);
+  try {
+    await sendText({ data: { conversationId, message: msg } });
+    await qc.invalidateQueries({ queryKey: ["conversation", conversationId] });
+  } finally {
+    setIsSending(false);
+  }
+}
+
+// Do JSX na spodok stránky pridať:
+<form onSubmit={handleSend} className="sticky bottom-0 border-t bg-background/95 p-4 backdrop-blur">
+  <div className="mx-auto flex max-w-2xl gap-2">
+    <input
+      type="text"
+      value={textInput}
+      onChange={(e) => setTextInput(e.target.value)}
+      placeholder="Napíš správu Brumíkovi…"
+      className="flex-1 rounded-full border bg-secondary px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+    />
+    <button
+      type="submit"
+      disabled={isSending || !textInput.trim()}
+      className="rounded-full bg-primary px-5 py-2 font-medium text-primary-foreground disabled:opacity-50"
+    >
+      Odoslať
+    </button>
+  </div>
+</form>
+{ conversationId: string }) {
   const qc = useQueryClient();
   const finish = useServerFn(finishConversation);
   const [token, setToken] = useState<string | null>(null);
