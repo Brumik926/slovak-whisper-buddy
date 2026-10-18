@@ -53,7 +53,7 @@ export const sendTextMessage = createServerFn({ method: "POST" })
 
     const provider = createOpenAI({
       baseURL: "https://ai.gateway.lovable.dev/v1",
-      apiKey: key,
+      apiKey: key ?? "",
     });
 
     // 3. Odpoveď Brumíka
@@ -125,7 +125,7 @@ export const finishConversation = createServerFn({ method: "POST" })
     const { streamText, Output, NoObjectGeneratedError } = await import("ai");
     const provider = createOpenAI({
       baseURL: "https://ai.gateway.lovable.dev/v1",
-      apiKey: key,
+      apiKey: key ?? "",
       headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
     });
     const transcript = data.entries.map((e) => `${e.role === "user" ? "Používateľ" : "Asistent"}: ${e.text}`).join("\n");
