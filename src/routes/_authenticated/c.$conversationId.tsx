@@ -9,20 +9,21 @@ import { useLiveVoice, type LiveEvent } from "@/hooks/use-live-voice";
 import { finishConversation, sendTextMessage } from "@/lib/conversations.functions";
 
 export const Route = createFileRoute("/_authenticated/c/$conversationId")({
-  head: () => ({
-    meta: [
-      { title: "Brumík AI" },
-      { name: "description", content: "Brumík AI – tvoj osobný hlasový a textový spoločník, ktorý sa učí z rozhovorov." },
-      { property: "og:title", content: "Brumík AI" },
-      { property: "og:description", content: "Brumík AI – tvoj osobný hlasový a textový spoločník, ktorý sa učí z rozhovorov." },
-      { property: "og:type", content: "website" },
-      { property: "og:url", content: "https://slovak-whisper-buddy.lovable.app/c/77d73564-2c40-47bc-b1ba-24db87433cba" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
-    links: [
-      { rel: "canonical", href: "https://slovak-whisper-buddy.lovable.app/c/77d73564-2c40-47bc-b1ba-24db87433cba" },
-    ],
-  }),
+  head: ({ params }) => {
+    const url = `https://slovak-whisper-buddy.lovable.app/c/${params.conversationId}`;
+    return {
+      meta: [
+        { title: "Brumík AI" },
+        { name: "description", content: "Brumík AI – tvoj osobný hlasový a textový spoločník, ktorý sa učí z rozhovorov." },
+        { property: "og:title", content: "Brumík AI" },
+        { property: "og:description", content: "Brumík AI – tvoj osobný hlasový a textový spoločník, ktorý sa učí z rozhovorov." },
+        { property: "og:type", content: "website" },
+        { property: "og:url", content: url },
+        { name: "twitter:card", content: "summary_large_image" },
+      ],
+      links: [{ rel: "canonical", href: url }],
+    };
+  },
   component: ConversationPage,
 });
 
