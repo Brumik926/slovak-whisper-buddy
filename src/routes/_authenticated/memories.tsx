@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -18,6 +19,12 @@ export const Route = createFileRoute("/_authenticated/memories")({
 });
 
 function Memories() {
+  const qc = useQueryClient();
+  const remove = async (id: string) => {
+    if (!confirm("Zabudnúť túto spomienku?")) return;
+    await supabase.from("memories").delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["memories"] });
+  };
   const { data, isLoading } = useQuery({
     queryKey: ["memories"],
     queryFn: async () => {
@@ -49,7 +56,8 @@ function Memories() {
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-widest text-primary">{category}</h2>
               <ul className="space-y-2">
                 {items.map((m) => (
-                  <li key={m.id} className="rounded-2xl border bg-card/50 px-4 py-3">
+                  <li key={m.id} className="relative rounded-2xl border bg-card/50 px-4 py-3 pr-12">
+                    <button onClick={() => remove(m.id)} aria-label="Zabudnúť" className="absolute right-3 top-3 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></button>
                     {m.content}
                     <div className="mt-1 text-xs text-muted-foreground">{new Date(m.created_at).toLocaleDateString("sk-SK")}</div>
                   </li>
