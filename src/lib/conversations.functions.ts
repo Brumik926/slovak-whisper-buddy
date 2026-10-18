@@ -48,6 +48,7 @@ export const sendTextMessage = createServerFn({ method: "POST" })
       .limit(60);
 
     const key = process.env["LOVABLE_API_KEY"];
+    if (!key) throw new Error("AI nie je nakonfigurovaná");
     const { createOpenAI } = await import("@ai-sdk/openai");
     const { generateText } = await import("ai");
 
