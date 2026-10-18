@@ -128,15 +128,18 @@ export const finishConversation = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(120);
 
-    const key = process.env["LOVABLE_API_KEY"];
-    if (!key) throw new Error("AI nie je nakonfigurovaná");
-    const { createOpenAI } = await import("@ai-sdk/openai");
-    const { streamText, Output, NoObjectGeneratedError } = await import("ai");
-    const provider = createOpenAI({
-      baseURL: "https://ai.gateway.lovable.dev/v1",
-      apiKey: key,
-      headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-    });
+    const openaiKey = process.env["OPENAI_API_KEY"] || process.env["LOVABLE_API_KEY"];
+if (!openaiKey) throw new Error("AI nie je nakonfigurovaná");
+const { createOpenAI } = await import("@ai-sdk/openai");
+const { streamText, Output, NoObjectGeneratedError } = await import("ai");
+
+const isCustomOpenAI = Boolean(process.env["OPENAI_API_KEY"]);
+
+const provider = createOpenAI({
+  baseURL: isCustomOpenAI ? "https://api.openai.com/v1" : "https://ai.gateway.lovable.dev/v1",
+  apiKey: openaiKey,
+  headers: isCustomOpenAI ? {} : { "Lovable-API-Key": openaiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+});
     const transcript = data.entries.map((e) => `${e.role === "user" ? "Používateľ" : "Asistent"}: ${e.text}`).join("\n");
     const result = streamText({
       model: provider.responses("openai/gpt-6-astra"),
