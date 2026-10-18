@@ -48,27 +48,23 @@ export const sendTextMessage = createServerFn({ method: "POST" })
       .limit(60);
 
     const openaiKey = process.env["OPENAI_API_KEY"] || process.env["LOVABLE_API_KEY"];
-if (!openaiKey) throw new Error("AI nie je nakonfigurovaná");
-const { createOpenAI } = await import("@ai-sdk/openai");
-const { generateText } = await import("ai");
+    if (!openaiKey) throw new Error("AI nie je nakonfigurovaná");
 
-const isCustomOpenAI = Boolean(process.env["OPENAI_API_KEY"]);
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const { generateText } = await import("ai");
 
-const provider = createOpenAI({
-  // Ak existuje vlastný kľúč, voláme priamo api.openai.com, inak Lovable Gateway
-  baseURL: isCustomOpenAI ? "https://api.openai.com/v1" : "https://ai.gateway.lovable.dev/v1",
-  apiKey: openaiKey,
-});
+    const isCustomOpenAI = Boolean(process.env["OPENAI_API_KEY"]);
 
-// 3. Odpoveď Brumíka
-const { text: reply } = await generateText({
-  // Pri priamom OpenAI použijeme oficiálny model gpt-4o alebo gpt-4o-mini
-  model: provider(isCustomOpenAI ? "gpt-4o" : "openai/gpt-5"),
-  system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, máš všestranný rozhľad a poznatky z technológie a zo sveta.
-Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
-  prompt: data.message,
-});
+    const provider = createOpenAI({
+      baseURL: isCustomOpenAI ? "https://api.openai.com/v1" : "https://ai.gateway.lovable.dev/v1",
+      apiKey: openaiKey,
+      headers: isCustomOpenAI ? {} : { "Lovable-API-Key": openaiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    });
 
+    // 3. Odpoveď Brumíka
+    const { text: reply } = await generateText({
+      model: provider(isCustomOpenAI ? "gpt-4o" : "openai/gpt-5"),
+      system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, máš všestranný rozhľad a poznatky z technológie a zo sveta.
 Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
       prompt: data.message,
     });
@@ -129,31 +125,40 @@ export const finishConversation = createServerFn({ method: "POST" })
       .limit(120);
 
     const openaiKey = process.env["OPENAI_API_KEY"] || process.env["LOVABLE_API_KEY"];
-if (!openaiKey) throw new Error("AI nie je nakonfigurovaná");
-const { createOpenAI } = await import("@ai-sdk/openai");
-const { streamText, Output, NoObjectGeneratedError } = await import("ai");
+    if (!openaiKey) throw new Error("AI nie je nakonfigurovaná");
 
-const isCustomOpenAI = Boolean(process.env["OPENAI_API_KEY"]);
+    const { createOpenAI } = await import("@ai-sdk/openai");
+    const { streamText, Output, NoObjectGeneratedError } = await import("ai");
 
-const provider = createOpenAI({
-  baseURL: isCustomOpenAI ? "https://api.openai.com/v1" : "https://ai.gateway.lovable.dev/v1",
-  apiKey: openaiKey,
-  headers: isCustomOpenAI ? {} : { "Lovable-API-Key": openaiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
-});
-    const transcript = data.entries.map((e) => `${e.role === "user" ? "Používateľ" : "Asistent"}: ${e.text}`).join("\n");
+    const isCustomOpenAI = Boolean(process.env["OPENAI_API_KEY"]);
+
+    const provider = createOpenAI({
+      baseURL: isCustomOpenAI ? "https://api.openai.com/v1" : "https://ai.gateway.lovable.dev/v1",
+      apiKey: openaiKey,
+      headers: isCustomOpenAI ? {} : { "Lovable-API-Key": openaiKey, "X-Lovable-AIG-SDK": "vercel-ai-sdk" },
+    });
+
+    const transcript = data.entries
+      .map((e) => `${e.role === "user" ? "Používateľ" : "Asistent"}: ${e.text}`)
+      .join("\n");
+
     const result = streamText({
-      model: provider.responses("openai/gpt-6-astra"),
+      model: isCustomOpenAI ? provider("gpt-4o") : provider.responses("openai/gpt-6-astra"),
       maxRetries: 0,
       output: Output.object({ schema: reflectionSchema }),
-      providerOptions: {
-        openai: {
-          forceReasoning: true,
-          reasoningEffort: "low",
-          reasoningSummary: "auto",
-          store: false,
-          include: ["reasoning.encrypted_content"],
-        },
-      },
+      ...(isCustomOpenAI
+        ? {}
+        : {
+            providerOptions: {
+              openai: {
+                forceReasoning: true,
+                reasoningEffort: "low",
+                reasoningSummary: "auto",
+                store: false,
+                include: ["reasoning.encrypted_content"],
+              },
+            },
+          }),
       system:
         "Analyzuješ hlasový rozhovor osobného AI spoločníka s jeho jediným používateľom. Všetko píš po slovensky. " +
         "title: krátky názov rozhovoru (max 6 slov). summary: 1–3 vety o tom, čo sa riešilo (ak existuje predchádzajúci súhrn, zahrň ho). " +
@@ -174,7 +179,10 @@ const provider = createOpenAI({
       }
       if (!reflection) {
         console.error("Reflection failed", error);
-        await supabase.from("conversations").update({ updated_at: new Date().toISOString() }).eq("id", data.conversationId);
+        await supabase
+          .from("conversations")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", data.conversationId);
         return { learned: 0 };
       }
     }
@@ -183,11 +191,13 @@ const provider = createOpenAI({
       .map((m) => ({ content: m.content.trim().slice(0, 300), category: m.category }))
       .filter((m) => m.content)
       .slice(0, 8);
+
     if (fresh.length) {
       await supabase.from("memories").insert(
         fresh.map((m) => ({ ...m, user_id: userId, source_conversation_id: data.conversationId })),
       );
     }
+
     await supabase
       .from("conversations")
       .update({
@@ -196,5 +206,6 @@ const provider = createOpenAI({
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.conversationId);
+
     return { learned: fresh.length };
   });
