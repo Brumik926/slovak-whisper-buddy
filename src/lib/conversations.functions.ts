@@ -64,7 +64,9 @@ export const sendTextMessage = createServerFn({ method: "POST" })
     // 3. Odpoveď Brumíka
     const { text: reply } = await generateText({
       model: provider(isCustomOpenAI ? "gpt-4o" : "openai/gpt-5"),
-      system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, máš všestranný rozhľad a poznatky z technológie a zo sveta.
+            system: `Si Brumík, osobný inteligentný spoločník. Hovoríš po slovensky, máš všestranný rozhľad a bohaté znalosti z technológií, vedy aj zo sveta.
+Na otázky používateľa odpovedaj priamo, múdro a zaujímavo. Nikdy neodpovedaj vyhýbavo, že ti niečo nevysvetlil — využi svoje všeobecné vedomosti.
+Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
 Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
       prompt: data.message,
     });
