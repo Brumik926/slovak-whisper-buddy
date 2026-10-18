@@ -11,12 +11,16 @@ import { finishConversation, sendTextMessage } from "@/lib/conversations.functio
 export const Route = createFileRoute("/_authenticated/c/$conversationId")({
   head: () => ({
     meta: [
-      { title: "Rozhovor – Brumík" },
-      { name: "description", content: "Hlasový a textový rozhovor s tvojím osobným spoločníkom." },
-      { property: "og:title", content: "Rozhovor – Brumík" },
-      { property: "og:description", content: "Hlasový a textový rozhovor s tvojím osobným spoločníkom." },
+      { title: "Brumík AI" },
+      { name: "description", content: "Brumík AI – tvoj osobný hlasový a textový spoločník, ktorý sa učí z rozhovorov." },
+      { property: "og:title", content: "Brumík AI" },
+      { property: "og:description", content: "Brumík AI – tvoj osobný hlasový a textový spoločník, ktorý sa učí z rozhovorov." },
       { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://slovak-whisper-buddy.lovable.app/c/77d73564-2c40-47bc-b1ba-24db87433cba" },
       { name: "twitter:card", content: "summary_large_image" },
+    ],
+    links: [
+      { rel: "canonical", href: "https://slovak-whisper-buddy.lovable.app/c/77d73564-2c40-47bc-b1ba-24db87433cba" },
     ],
   }),
   component: ConversationPage,
