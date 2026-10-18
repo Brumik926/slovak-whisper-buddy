@@ -47,20 +47,28 @@ export const sendTextMessage = createServerFn({ method: "POST" })
       .order("created_at", { ascending: false })
       .limit(60);
 
-    const key = process.env["LOVABLE_API_KEY"];
-    if (!key) throw new Error("AI nie je nakonfigurovaná");
-    const { createOpenAI } = await import("@ai-sdk/openai");
-    const { generateText } = await import("ai");
+    const openaiKey = process.env["OPENAI_API_KEY"] || process.env["LOVABLE_API_KEY"];
+if (!openaiKey) throw new Error("AI nie je nakonfigurovaná");
+const { createOpenAI } = await import("@ai-sdk/openai");
+const { generateText } = await import("ai");
 
-    const provider = createOpenAI({
-      baseURL: "https://ai.gateway.lovable.dev/v1",
-      apiKey: key,
-    });
+const isCustomOpenAI = Boolean(process.env["OPENAI_API_KEY"]);
 
-    // 3. Odpoveď Brumíka
-    const { text: reply } = await generateText({
-      model: provider("openai/gpt-5"),
-      system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, teplo, priateľsky a stručne.
+const provider = createOpenAI({
+  // Ak existuje vlastný kľúč, voláme priamo api.openai.com, inak Lovable Gateway
+  baseURL: isCustomOpenAI ? "https://api.openai.com/v1" : "https://ai.gateway.lovable.dev/v1",
+  apiKey: openaiKey,
+});
+
+// 3. Odpoveď Brumíka
+const { text: reply } = await generateText({
+  // Pri priamom OpenAI použijeme oficiálny model gpt-4o alebo gpt-4o-mini
+  model: provider(isCustomOpenAI ? "gpt-4o" : "openai/gpt-5"),
+  system: `Si Brumík, osobný spoločník. Hovoríš po slovensky, máš všestranný rozhľad a poznatky z technológie a zo sveta.
+Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
+  prompt: data.message,
+});
+
 Poznatky o používateľovi:\n${(memories ?? []).map((m) => `- ${m.content}`).join("\n") || "- zatiaľ žiadne"}`,
       prompt: data.message,
     });
