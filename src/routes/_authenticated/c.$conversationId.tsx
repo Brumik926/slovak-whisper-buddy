@@ -277,6 +277,9 @@ function Conversation({ conversationId }: { conversationId: string }) {
             </p>
           ),
         )}
+        {isSending && (
+          <p className="animate-pulse text-sm text-muted-foreground">Brumík píše…</p>
+        )}
         <div ref={bottomRef} />
       </section>
 

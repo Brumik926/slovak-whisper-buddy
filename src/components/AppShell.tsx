@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
-import { Brain, LogOut, Menu, Plus, X } from "lucide-react";
+import { Brain, LogOut, Menu, Plus, Trash2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 export const conversationsQuery = {
@@ -32,6 +32,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { data: conversations } = useQuery(conversationsQuery);
   const params = useParams({ strict: false }) as { conversationId?: string };
   const newConversation = useNewConversation();
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const removeConversation = async (id: string) => {
+    if (!confirm("Zmazať tento rozhovor? Spomienky zostanú.")) return;
+    await supabase.from("transcript_entries").delete().eq("conversation_id", id);
+    await supabase.from("conversations").delete().eq("id", id);
+    await qc.invalidateQueries({ queryKey: ["conversations"] });
+    if (params.conversationId === id) navigate({ to: "/" });
+  };
 
   const sidebar = (
     <nav className="flex h-full flex-col gap-4 p-4">
@@ -54,18 +63,26 @@ export function AppShell({ children }: { children: ReactNode }) {
       </button>
       <div className="-mx-1 flex-1 overflow-y-auto">
         {(conversations ?? []).map((c) => (
+          <div key={c.id} className="group relative">
           <Link
-            key={c.id}
             to="/c/$conversationId"
             params={{ conversationId: c.id }}
             onClick={() => setOpen(false)}
-            className={`block rounded-xl px-3 py-2.5 text-sm transition hover:bg-accent ${
+            className={`block rounded-xl px-3 py-2.5 pr-10 text-sm transition hover:bg-accent ${
               params.conversationId === c.id ? "bg-accent text-foreground" : "text-muted-foreground"
             }`}
           >
             <div className="truncate font-medium text-foreground">{c.title}</div>
             <div className="text-xs">{new Date(c.updated_at).toLocaleDateString("sk-SK")}</div>
           </Link>
+          <button
+            onClick={() => void removeConversation(c.id)}
+            aria-label="Zmazať rozhovor"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          </div>
         ))}
         {conversations?.length === 0 && <p className="px-3 text-sm text-muted-foreground">Zatiaľ žiadne rozhovory.</p>}
       </div>
